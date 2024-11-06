@@ -1,5 +1,6 @@
 package com.app.quizparlour
 
+import android.icu.text.SimpleDateFormat
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -18,60 +19,58 @@ import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import retrofit2.http.Field
+import retrofit2.http.FormUrlEncoded
+import retrofit2.http.POST
+import java.util.Locale
 
 class RazorPayActivity : AppCompatActivity(), PaymentResultListener {
 
     private lateinit var amountEditText: EditText
     private lateinit var buyNowButton: Button
-    private val userId = "1902" // Set user ID here
+    private val userId = "1902"
     private val username = "Akshay Kumar Prajapati"
     private val contactNumber = "8987918309"
-    private val emailAdress = "meliveakshay@gmail.com"
+    private val emailAddress = "meliveakshay@gmail.com"
     private val companyName = "Quiz Parlour"
-    private val razor_pay_api_key = "rzp_test_XTRFi55yS7MOsO"
+    private val razorPayApiKey = "rzp_live_0e7KaXdVczrhK6"
 
     companion object {
-        private const val TAG = "RazorPayActivity" // Tag for logging
+        private const val TAG = "RazorPayActivity"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main) // Set layout
-        Checkout.preload(applicationContext) // Preload Razorpay checkout
-        initialView() // Initialize views
-        setup() // Setup button click listeners
+        setContentView(R.layout.activity_main)
+        Checkout.preload(applicationContext)
+        initializeView()
+        setupListeners()
     }
 
-    private fun initialView() {
-        amountEditText = findViewById(R.id.amountEditText) // EditText for amount input
-        buyNowButton = findViewById(R.id.buyNowButton) // Button to initiate payment
+    private fun initializeView() {
+        amountEditText = findViewById(R.id.amountEditText)
+        buyNowButton = findViewById(R.id.buyNowButton)
     }
 
-    private fun setup() {
+    private fun setupListeners() {
         buyNowButton.setOnClickListener {
-            val amountText = amountEditText.text.toString() // Get the amount entered by user
+            val amountText = amountEditText.text.toString()
+            val amount = amountText.toDoubleOrNull()
 
-            // Check if amount is empty
-            if (amountText.isEmpty()) {
-                Toast.makeText(this, "Please enter amount", Toast.LENGTH_SHORT).show()
-                Log.e(TAG, "Please enter amount") // Log error
-            } else {
-                val amount = amountText.toDoubleOrNull() // Parse amount to Double
-                // Validate amount
-                if (amount == null || amount <= 0) {
-                    Toast.makeText(this, "Invalid amount", Toast.LENGTH_SHORT).show()
-                    Log.e(TAG, "Invalid amount entered: $amountText") // Log error
-                } else {
-                    Log.d(TAG, "Payment Initiated for amount: $amount") // Log payment initiation
-                    createOrderId(amountText) // Create order ID
-                }
+            if (amount == null || amount <= 0) {
+                Toast.makeText(this, "Please enter a valid amount", Toast.LENGTH_SHORT).show()
+                Log.e(TAG, "Invalid amount: $amountText")
+                return@setOnClickListener
             }
+
+            Log.d(TAG, "Payment Initiated with amount: $amount")
+            createOrderId(amount)
         }
     }
 
-    private fun createOrderId(amount: String) {
+    private fun createOrderId(amount: Double) {
         val apiService = RazorPayInstance.apiService
-        val amountInPaise = (amount.toDouble() * 100).toInt() // Convert amount to paise
+        val amountInPaise = (amount * 100).toInt()
         val orderRequest = RazorpayOrderRequest(
             amount = amountInPaise,
             currency = "INR",
@@ -82,63 +81,61 @@ class RazorPayActivity : AppCompatActivity(), PaymentResultListener {
             )
         )
 
-        // Make API call to create order
         apiService.createOrder(orderRequest).enqueue(object : Callback<RazorpayOrderResponse> {
             override fun onResponse(call: Call<RazorpayOrderResponse>, response: Response<RazorpayOrderResponse>) {
                 if (response.isSuccessful) {
-                    val orderResponse = response.body()
-                    val orderId = orderResponse?.id
+                    val orderId = response.body()?.id
                     if (orderId != null) {
-                        // Order created successfully
-                        Toast.makeText(this@RazorPayActivity, "Order ID: $orderId", Toast.LENGTH_SHORT).show()
-                        Log.d(TAG, "Order created successfully: $orderId") // Log order ID
-                        startPayment(userId = userId, amount = amount, description = "Payment for Quiz", orderId = orderId) // Start payment
+
+                        startPayment(userId, amount.toString(), "Payment for Quiz", orderId)
+                        Log.d(TAG, "Order created successfully: $orderId")
                     } else {
-                        Log.e(TAG, "Order ID not found in response")
-                        Toast.makeText(this@RazorPayActivity, "Failed to create order", Toast.LENGTH_SHORT).show()
+                        handleOrderFailure("Order ID not found in response")
                     }
                 } else {
-                    Log.e(TAG, "Failed to create order: ${response.errorBody()?.string()}")
-                    Toast.makeText(this@RazorPayActivity, "Failed to create order", Toast.LENGTH_SHORT).show()
+                    handleOrderFailure("Failed to create order: ${response.errorBody()?.string()}")
                 }
             }
 
             override fun onFailure(call: Call<RazorpayOrderResponse>, t: Throwable) {
-                Log.e(TAG, "Error creating order: ${t.message}")
-                Toast.makeText(this@RazorPayActivity, "Error creating order", Toast.LENGTH_SHORT).show()
+                handleOrderFailure("Error creating order: ${t.message}")
             }
         })
     }
 
+
+
+
+
     private fun startPayment(userId: String, amount: String, description: String, orderId: String) {
         val co = Checkout()
-        co.setKeyID(razor_pay_api_key) // Set Razorpay API key
+        co.setKeyID(razorPayApiKey)
         try {
             val options = JSONObject().apply {
-                put("name", companyName) // Company name
-                put("description", description) // Payment description
-                put("image", "https://quizparlour.in/assets/img/logo.png") // Company logo
-                put("theme.color", "#3a1486") // Theme color
-                put("currency", "INR") // Currency
-                put("amount", (amount.toDouble() * 100).toInt()) // Amount in paise
-                put("order_id", orderId) // Order ID
+                put("name", companyName)
+                put("description", description)
+                put("image", "https://quizparlour.in/assets/img/logo.png")
+                put("theme.color", "#3399cc")
+                put("currency", "INR")
+                put("amount", (amount.toDouble() * 100).toInt())
+                put("order_id", orderId)
                 put("retry", JSONObject().apply {
-                    put("enabled", true) // Retry enabled
-                    put("max_count", 4) // Max retry count
+                    put("enabled", true)
+                    put("max_count", 4)
                 })
                 put("prefill", JSONObject().apply {
-                    put("name", username) // User name
-                    put("email", emailAdress) // User email
-                    put("contact", contactNumber) // User contact
+                    put("name", username)
+                    put("email", emailAddress)
+                    put("contact", contactNumber)
                 })
                 put("method", JSONObject().apply {
-                    put("netbanking", true) // Enable net banking
-                    put("card", true) // Enable card payments
-                    put("wallet", true) // Enable wallets
-                    put("upi", true) // Enable UPI
+                    put("netbanking", true)
+                    put("card", true)
+                    put("wallet", true)
+                    put("upi", true)
                 })
             }
-            co.open(this, options) // Open Razorpay checkout
+            co.open(this, options)
         } catch (e: Exception) {
             Log.e(TAG, "Error in startPayment: ${e.message}")
             Toast.makeText(this, "Error in payment: ${e.message}", Toast.LENGTH_LONG).show()
@@ -147,24 +144,17 @@ class RazorPayActivity : AppCompatActivity(), PaymentResultListener {
 
     override fun onPaymentSuccess(transactionId: String?) {
         Log.d(TAG, "Transaction successful: ID $transactionId")
-        val transactionAmount = amountEditText.text.toString().toDoubleOrNull()?.toInt() ?: 0 // Get amount entered by the user
-        val transactionType = "ADD"
-        val transactionStatus = "COMPLETED"
-        val transactionDescription = "Money Added To Wallet"
-
-        // Send transaction status to server
-        sendTransactionStatus(userId, transactionAmount, transactionType, transactionStatus, transactionDescription)
+        handleTransactionResult("COMPLETED", "Money Added To Wallet")
     }
 
     override fun onPaymentError(errorCode: Int, errorMessage: String?) {
         Log.e(TAG, "Transaction failed with code $errorCode: $errorMessage")
-        val transactionAmount = amountEditText.text.toString().toDoubleOrNull()?.toInt() ?: 0 // Get amount entered by the user
-        val transactionType = "ADD"
-        val transactionStatus = "FAILED"
-        val transactionDescription = "Money Add Failed"
+        handleTransactionResult("FAILED", "Money Add Failed")
+    }
 
-        // Send transaction status to server
-        sendTransactionStatus(userId, transactionAmount, transactionType, transactionStatus, transactionDescription)
+    private fun handleTransactionResult(status: String, description: String) {
+        val transactionAmount = amountEditText.text.toString().toDoubleOrNull()?.toInt() ?: 0
+        sendTransactionStatus(userId, transactionAmount, "ADD", status, description)
     }
 
     private fun sendTransactionStatus(
@@ -176,31 +166,23 @@ class RazorPayActivity : AppCompatActivity(), PaymentResultListener {
     ) {
         val apiService = RetrofitInstance.apiService
         apiService.sendTransactionStatus(
-            userId = userId.toInt(), // Convert userId to Int if necessary
-            transactionAmount = amount.toDouble(), // Ensure this matches the expected type
+            userId = userId.toInt(),
+            transactionAmount = amount.toDouble(),
             transactionType = type,
             transactionStatus = status,
             transactionDescription = description
         ).enqueue(object : Callback<TransactionResponse> {
             override fun onResponse(call: Call<TransactionResponse>, response: Response<TransactionResponse>) {
                 if (response.isSuccessful) {
-                    response.body()?.let { responseBody ->
-                        // Check transaction status and show dialog accordingly
-                        when (responseBody.status) {
-                            1.toString() -> showDialog("Transaction Successful", "Transaction successful. Transaction ID: ${responseBody.data?.transaction_id ?: "N/A"}. Message: $description")
-                            0.toString() -> showDialog("Transaction Failed", "Transaction failed. Transaction ID: ${responseBody.data?.transaction_id ?: "N/A"}. Message: $description")
-                            else -> showDialog("Transaction Failed", "Unknown status code: ${responseBody.status}")
-                        }
-                    } ?: showDialog("Transaction Failed", "Response body is null.")
+                    val message = if (response.body()?.status == "1") "Transaction Successful" else "Transaction Failed"
+                    showDialog(message, "Transaction ID: ${response.body()?.data?.transaction_id ?: "N/A"}")
                 } else {
-                    Log.e(TAG, "Failed to send transaction data: ${response.errorBody()?.string()}")
                     showDialog("Transaction Failed", "Failed to log transaction")
                 }
             }
 
             override fun onFailure(call: Call<TransactionResponse>, t: Throwable) {
-                Log.e(TAG, "Error sending transaction data: ${t.message}")
-                showDialog("Transaction Failed", "Error logging transaction")
+                showDialog("Transaction Failed", "Network error: ${t.message}")
             }
         })
     }
@@ -210,6 +192,12 @@ class RazorPayActivity : AppCompatActivity(), PaymentResultListener {
             .setTitle(title)
             .setMessage(message)
             .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+            .create()
             .show()
+    }
+
+    private fun handleOrderFailure(errorMessage: String) {
+        Log.e(TAG, errorMessage)
+        Toast.makeText(this, "Failed to create order", Toast.LENGTH_SHORT).show()
     }
 }

@@ -13,7 +13,7 @@ object RazorPayInstance {
     private val client = OkHttpClient.Builder().addInterceptor { chain ->
         val original = chain.request()
         val request = original.newBuilder()
-            .header("Authorization", Credentials.basic("rzp_test_XTRFi55yS7MOsO", "deLHdhyz1yYxC4aiaTHIDaOm"))
+            .header("Authorization", Credentials.basic("rzp_live_0e7KaXdVczrhK6", "APpK6rVzdSFLoNmKYa9LaGpE"))
             .method(original.method, original.body)
             .build()
         chain.proceed(request)
